@@ -17,16 +17,20 @@ async fn main() {
 
     extensions.add_prime(prime!(request, _host, _addr {
         if request.uri().path() == "/" {
-            if let Some(ua) =  request.headers().get("user-agent").map(HeaderValue::to_str).and_then(Result::ok) {
+            // This maps the Option<HeaderValue> to Option<Result<&str, _>> which the
+            // `.and_then(Result::ok)` makes Option<&str>, returning `Some` if the value is both `Ok` and `Some`.
+            // Could also be written as
+            // `.get("user-agent").and_then(|header| header.to_str().ok())`.
+            if let Some(ua) = request.headers().get("user-agent").map(HeaderValue::to_str).and_then(Result::ok) {
                 if ua.contains("curl") {
                     Some(Uri::from_static("/ip"))
-                }else {
+                } else {
                     Some(Uri::from_static("/index.html"))
                 }
-            }else {
+            } else {
                 None
             }
-        }else {
+        } else {
             None
         }
     }), extensions::Id::new(16, "Redirect `/`"));
@@ -36,14 +40,17 @@ async fn main() {
         prepare!(_request, _host, _path, addr {
             let ip = addr.ip().to_string();
             let response = Response::new(Bytes::copy_from_slice(ip.as_bytes()));
-            FatResponse::new(response, ServerCachePreference::None)
+            FatResponse::no_cache(response)
         }),
     );
     extensions.add_prepare_single(
         "/index.html".to_string(),
         prepare!(_request, _host, _path, addr {
-            let content = format!("!> simple-head Your IP address\n\
-                                  <h2>Your IP address is {}</h2>", addr.ip());
+            let content = format!(
+                "!> simple-head Your IP address\n\
+                <h2>Your IP address is {}</h2>",
+                addr.ip()
+            );
             let response = Response::new(Bytes::copy_from_slice(content.as_bytes()));
             FatResponse::new(response, ServerCachePreference::None)
         }),
